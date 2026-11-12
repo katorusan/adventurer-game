@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://d1oq0xid7uiyj"]
+
+[ext_resource type="Script" uid="uid://b1aa8t6oe07n7" path="res://Expedition.gd" id="1_a42cq"]
+
+[node name="Control" type="Control" unique_id=1492420488]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_a42cq")

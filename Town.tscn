@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://c3uq67io4oifd"]
+
+[ext_resource type="Script" uid="uid://ih484ka83lvb" path="res://town.gd" id="1_nihrx"]
+
+[node name="Control" type="Control" unique_id=116856356]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_nihrx")
