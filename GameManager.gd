@@ -6,6 +6,12 @@ var player_hp = 15
 var max_hp = 15
 var current_enemy_id = 0 
 
+# --- НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ ПОДЗЕМЕЛЬЯ ---
+var expedition_saved_pos = Vector2.ZERO
+var expedition_saved_dir = Vector2.RIGHT
+var expedition_is_returning = false
+# ----------------------------------------
+
 var inventory = [] 
 
 var item_db = {
@@ -59,7 +65,6 @@ func load_game():
 			for item in json.get("inventory", []):
 				inventory.append(item)
 
-# НОВАЯ ФУНКЦИЯ: Сброс прогресса для новой игры
 func reset_game():
 	gold = 0
 	xp = 0
@@ -69,7 +74,7 @@ func reset_game():
 	discovered_enemies.clear()
 	if FileAccess.file_exists(save_path):
 		DirAccess.remove_absolute(save_path)
-	save_game() # Сохраняем пустое состояние
+	save_game() 
 
 func add_rewards(xp_amount, drop_item_id):
 	xp += xp_amount

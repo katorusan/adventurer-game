@@ -7,6 +7,7 @@ var cells_array = []
 
 var obstacles_array = [] 
 
+var ui_layer: CanvasLayer
 var ui_label: Label
 var ui_panel: Panel
 var player_hp_bar: ProgressBar
@@ -17,6 +18,7 @@ var end_panel: Panel
 var end_title: Label
 var end_subtitle: Label
 var end_button: Button
+var btn_return_town: Button # НОВАЯ КНОПКА
 var is_win = false
 
 var player_cell_index = 30  
@@ -48,12 +50,15 @@ var enemy_y = 144
 
 var cols = 10
 var rows = 8
-var radius = 45.0 
+var radius = 40.0 
 var squash = 0.65 
 
 var pause_overlay: ColorRect
 var pause_panel: Panel
 var confirm_panel: Panel
+
+var font_title = load("res://assets/fonts/Rubik-Regular.ttf")
+var font_text = load("res://assets/fonts/Nunito-Regular.ttf")
 
 func _ready():
 	player_hp = GameManager.player_hp
@@ -69,6 +74,26 @@ func _ready():
 	enemy_x = current["x"]
 	enemy_y = current["y"]
 	
+	# 1. ФОН (ПЕЩЕРА) 
+	var bg_dark = ColorRect.new()
+	bg_dark.color = Color(0.15, 0.15, 0.2) 
+	bg_dark.size = Vector2(1280, 720) 
+	bg_dark.z_index = -20 
+	add_child(bg_dark)
+
+	draw_background_decor(bg_dark)
+
+	# Круглая арена
+	var arena_bg = Polygon2D.new()
+	var arena_pts = PackedVector2Array()
+	for i in range(40):
+		var angle = (i / 40.0) * TAU
+		arena_pts.append(Vector2(cos(angle) * 500, sin(angle) * 300) + Vector2(640, 360))
+	arena_bg.polygon = arena_pts
+	arena_bg.color = Color(0.35, 0.32, 0.3) 
+	bg_dark.add_child(arena_bg)
+
+	# 2. ПОЛЕ БОЯ (ГЕКСАГОНЫ)
 	obstacles_array.clear()
 	var num_obstacles = randi_range(6, 10)
 	var attempts = 0
@@ -83,25 +108,8 @@ func _ready():
 			if get_neighbors(player_cell_index).size() == 0:
 				obstacles_array.pop_back()
 
-	var bg_dark = ColorRect.new()
-	bg_dark.color = Color(0.35, 0.45, 0.3) 
-	bg_dark.size = Vector2(1920, 1080) 
-	bg_dark.z_index = -20 
-	add_child(bg_dark)
-
-	draw_background_decor(bg_dark)
-
-	var arena_bg = Polygon2D.new()
-	var arena_pts = PackedVector2Array()
-	for i in range(40):
-		var angle = (i / 40.0) * TAU
-		arena_pts.append(Vector2(cos(angle) * 800, sin(angle) * 500) + Vector2(960, 540))
-	arena_bg.polygon = arena_pts
-	arena_bg.color = Color(0.6, 0.75, 0.4) 
-	bg_dark.add_child(arena_bg)
-
 	board_node = Node2D.new()
-	board_node.position = Vector2(622, 228) 
+	board_node.position = Vector2(340, 180) 
 	add_child(board_node)
 
 	for r in range(rows):
@@ -121,7 +129,7 @@ func _ready():
 			if i in obstacles_array:
 				cell.color = Color(0.2, 0.15, 0.1) 
 			else:
-				cell.color = Color(0.5, 0.7, 0.4) 
+				cell.color = Color(0.5, 0.48, 0.45) 
 			
 			var pos_x = 1.5 * radius * q
 			var pos_y = (sqrt(3) * radius * r + (q % 2) * (sqrt(3) * radius / 2)) * squash
@@ -133,6 +141,7 @@ func _ready():
 			if i in obstacles_array:
 				draw_rock(cell.position)
 
+	# 3. ПЕРСОНАЖИ
 	player = Sprite2D.new()
 	setup_sprite_from_tileset(player, tileset_path, hero_x, hero_y, cut_size)
 	player.offset = Vector2(0, -8) 
@@ -155,23 +164,30 @@ func _ready():
 	enemy_hp_bar = create_hp_bar(enemy_hp)
 	add_child(enemy_hp_bar)
 
+	# 4. UI (ИНТЕРФЕЙС)
+	ui_layer = CanvasLayer.new()
+	add_child(ui_layer)
+
+	# Виньетка (более мягкая)
+	create_screen_vignette()
+
 	ui_panel = Panel.new()
-	ui_panel.position = Vector2(660, 950) 
+	ui_panel.position = Vector2(340, 640) 
 	ui_panel.size = Vector2(600, 60) 
 	
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.3, 0.2, 0.1) 
+	style.bg_color = Color(0.15, 0.1, 0.05) 
 	style.border_width_left = 4
 	style.border_width_right = 4
 	style.border_width_top = 4
 	style.border_width_bottom = 4
-	style.border_color = Color(0.15, 0.05, 0.0) 
-	style.corner_radius_top_left = 5
-	style.corner_radius_top_right = 5
-	style.corner_radius_bottom_left = 5
-	style.corner_radius_bottom_right = 5
+	style.border_color = Color(0.6, 0.4, 0.1) 
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
 	ui_panel.add_theme_stylebox_override("panel", style)
-	add_child(ui_panel)
+	ui_layer.add_child(ui_panel)
 
 	ui_label = Label.new()
 	ui_label.position = Vector2(0, 15) 
@@ -185,29 +201,49 @@ func _ready():
 
 	potion_button = Button.new()
 	potion_button.text = "Выпить зелье"
-	potion_button.position = Vector2(430, 950)
-	potion_button.size = Vector2(200, 60)
-	potion_button.add_theme_font_size_override("font_size", 22)
+	potion_button.position = Vector2(40, 640)
+	potion_button.size = Vector2(220, 60)
+	potion_button.add_theme_font_size_override("font_size", 20)
 	potion_button.add_theme_color_override("font_outline_color", Color(0,0,0))
 	potion_button.add_theme_constant_override("outline_size", 4)
 	style_button(potion_button)
 	potion_button.pressed.connect(_on_potion_pressed)
-	add_child(potion_button)
+	ui_layer.add_child(potion_button)
 
 	create_end_screen()
 	create_pause_menu()
 	update_positions_instant()
 	update_ui()
 	
-	SoundManager.connect_ui_sounds(self)
+	if get_node_or_null("/root/SoundManager"):
+		SoundManager.connect_ui_sounds(self)
+
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+func create_screen_vignette():
+	var vignette = TextureRect.new()
+	var grad = Gradient.new()
+	grad.set_color(0, Color(0, 0, 0, 0))   
+	grad.set_color(0.7, Color(0, 0, 0, 0)) 
+	grad.set_color(1, Color(0, 0, 0, 0.8)) 
+	var tex = GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 512
+	tex.height = 512
+	vignette.texture = tex
+	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui_layer.add_child(vignette)
 
 func draw_rock(pos: Vector2):
 	var rock = Polygon2D.new()
 	rock.polygon = PackedVector2Array([
-		Vector2(-20, 10), Vector2(-10, -15), Vector2(15, -20), 
-		Vector2(25, 0), Vector2(15, 15), Vector2(-5, 20)
+		Vector2(-15, 8), Vector2(-8, -12), Vector2(12, -15), 
+		Vector2(18, 0), Vector2(10, 12), Vector2(-4, 15)
 	])
-	rock.color = Color(0.4, 0.4, 0.45) 
+	rock.color = Color(0.1, 0.1, 0.12) 
 	rock.position = pos
 	rock.z_index = 0
 	board_node.add_child(rock)
@@ -219,27 +255,27 @@ func add_shadow(node: Node2D):
 		var angle = (i / 8.0) * TAU
 		pts.append(Vector2(cos(angle) * 10, sin(angle) * 5)) 
 	shadow.polygon = pts
-	shadow.color = Color(0, 0, 0, 0.3) 
+	shadow.color = Color(0, 0, 0, 0.4) 
 	shadow.position = Vector2(0, 2) 
 	shadow.z_index = -1
 	node.add_child(shadow)
 
 func draw_background_decor(bg_node: Control):
-	for i in range(30):
-		var tree = Polygon2D.new()
-		var tx = randf_range(0, 1920)
-		var ty = randf_range(0, 1080)
+	for i in range(20):
+		var rock = Polygon2D.new()
+		var tx = randf_range(0, 1280)
+		var ty = randf_range(0, 720)
 		
-		if Vector2(tx, ty).distance_to(Vector2(960, 540)) < 600:
+		if Vector2(tx, ty).distance_to(Vector2(640, 360)) < 350:
 			continue
 			
-		tree.polygon = PackedVector2Array([
+		rock.polygon = PackedVector2Array([
 			Vector2(tx, ty), 
-			Vector2(tx + 40, ty - 80), 
-			Vector2(tx + 80, ty)
+			Vector2(tx + 30, ty - 100), 
+			Vector2(tx + 70, ty)
 		])
-		tree.color = Color(0.25, 0.35, 0.25) 
-		bg_node.add_child(tree)
+		rock.color = Color(0.2, 0.2, 0.25) 
+		bg_node.add_child(rock)
 
 func _on_potion_pressed():
 	if not is_player_turn or game_over: return
@@ -248,54 +284,40 @@ func _on_potion_pressed():
 		if GameManager.use_item("health_potion"):
 			player_hp = GameManager.player_hp
 			player_ap -= 1
-			SoundManager.play("potion")
+			if get_node_or_null("/root/SoundManager"): SoundManager.play("potion")
 			update_ui()
 			if player_ap == 0:
 				end_player_turn()
 
 func create_end_screen():
 	end_panel = Panel.new()
-	end_panel.position = Vector2(660, 300)
+	end_panel.position = Vector2(340, 150) 
 	end_panel.size = Vector2(600, 300)
 	end_panel.z_index = 100 
 	
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.05, 0.0) 
-	style.border_width_left = 4
-	style.border_width_right = 4
-	style.border_width_top = 4
-	style.border_width_bottom = 4
-	style.border_color = Color(0.1, 0.0, 0.0)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
+	style.bg_color = Color(0.1, 0.05, 0.0) 
+	style.border_width_left = 6
+	style.border_width_right = 6
+	style.border_width_top = 6
+	style.border_width_bottom = 6
+	style.border_color = Color(0.6, 0.4, 0.1)
+	style.corner_radius_top_left = 15
+	style.corner_radius_top_right = 15
+	style.corner_radius_bottom_left = 15
+	style.corner_radius_bottom_right = 15
 	end_panel.add_theme_stylebox_override("panel", style)
 	end_panel.visible = false
-	add_child(end_panel)
-
-	for i in range(4):
-		var plank = ColorRect.new()
-		plank.color = Color(0.45, 0.3, 0.15) if i % 2 == 0 else Color(0.4, 0.25, 0.1)
-		plank.position = Vector2(6, 6 + i * 71) 
-		plank.size = Vector2(588, 68)
-		end_panel.add_child(plank)
-
-	for pos in [Vector2(12, 12), Vector2(580, 12), Vector2(12, 280), Vector2(580, 280)]:
-		var nail = ColorRect.new()
-		nail.color = Color(0.15, 0.15, 0.15)
-		nail.position = pos
-		nail.size = Vector2(8, 8)
-		end_panel.add_child(nail)
+	ui_layer.add_child(end_panel)
 
 	end_title = Label.new()
 	end_title.position = Vector2(0, 30)
 	end_title.size = Vector2(600, 50)
 	end_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	end_title.add_theme_font_size_override("font_size", 54)
+	end_title.add_theme_font_size_override("font_size", 48)
 	end_title.add_theme_color_override("font_outline_color", Color(0,0,0))
 	end_title.add_theme_constant_override("outline_size", 6)
-	end_title.add_theme_font_override("font", load("res://assets/fonts/Rubik-Regular.ttf"))
+	if font_title: end_title.add_theme_font_override("font", font_title)
 	end_panel.add_child(end_title)
 
 	end_subtitle = Label.new()
@@ -303,29 +325,42 @@ func create_end_screen():
 	end_subtitle.size = Vector2(520, 80) 
 	end_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	end_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART 
-	end_subtitle.add_theme_font_size_override("font_size", 24)
+	end_subtitle.add_theme_font_size_override("font_size", 22)
 	end_subtitle.add_theme_color_override("font_color", Color(0.95, 0.9, 0.8))
 	end_subtitle.add_theme_color_override("font_outline_color", Color(0,0,0))
 	end_subtitle.add_theme_constant_override("outline_size", 4)
 	end_panel.add_child(end_subtitle)
 
+	# --- ОСНОВНАЯ КНОПКА (Продолжить путь / Вернуться в город) ---
 	end_button = Button.new()
-	end_button.position = Vector2(200, 200)
-	end_button.size = Vector2(200, 60)
-	end_button.add_theme_font_size_override("font_size", 24)
+	end_button.position = Vector2(110, 200) # Сдвинули влево
+	end_button.size = Vector2(180, 60)
+	end_button.add_theme_font_size_override("font_size", 20)
 	end_button.add_theme_color_override("font_outline_color", Color(0,0,0))
 	end_button.add_theme_constant_override("outline_size", 4)
 	style_button(end_button)
 	end_button.pressed.connect(_on_end_button_pressed)
 	end_panel.add_child(end_button)
 
+	# --- НОВАЯ КНОПКА (В город) ---
+	btn_return_town = Button.new()
+	btn_return_town.text = "В город"
+	btn_return_town.position = Vector2(310, 200) # Сдвинули вправо
+	btn_return_town.size = Vector2(180, 60)
+	btn_return_town.add_theme_font_size_override("font_size", 20)
+	btn_return_town.add_theme_color_override("font_outline_color", Color(0,0,0))
+	btn_return_town.add_theme_constant_override("outline_size", 4)
+	style_button(btn_return_town)
+	btn_return_town.pressed.connect(_on_return_town_pressed)
+	end_panel.add_child(btn_return_town)
+
 func style_button(btn):
 	var normal = StyleBoxFlat.new()
-	normal.bg_color = Color(0.2, 0.15, 0.1)
-	normal.border_width_left = 2
-	normal.border_width_right = 2
-	normal.border_width_top = 2
-	normal.border_width_bottom = 2
+	normal.bg_color = Color(0.25, 0.15, 0.1) 
+	normal.border_width_left = 3
+	normal.border_width_right = 3
+	normal.border_width_top = 3
+	normal.border_width_bottom = 3
 	normal.border_color = Color(0.8, 0.5, 0.2) 
 	normal.corner_radius_top_left = 8
 	normal.corner_radius_top_right = 8
@@ -334,12 +369,12 @@ func style_button(btn):
 	btn.add_theme_stylebox_override("normal", normal)
 
 	var hover = StyleBoxFlat.new()
-	hover.bg_color = Color(0.35, 0.2, 0.1)
-	hover.border_width_left = 2
-	hover.border_width_right = 2
-	hover.border_width_top = 2
-	hover.border_width_bottom = 2
-	hover.border_color = Color(1.0, 0.7, 0.3)
+	hover.bg_color = Color(0.4, 0.25, 0.15)
+	hover.border_width_left = 3
+	hover.border_width_right = 3
+	hover.border_width_top = 3
+	hover.border_width_bottom = 3
+	hover.border_color = Color(1.0, 0.8, 0.4)
 	hover.corner_radius_top_left = 8
 	hover.corner_radius_top_right = 8
 	hover.corner_radius_bottom_left = 8
@@ -354,7 +389,7 @@ func setup_sprite_from_tileset(sprite_node, path, x, y, size):
 		atlas.region = Rect2(x, y, size, size) 
 		sprite_node.texture = atlas
 		
-		var target_size = 50.0 
+		var target_size = 40.0 
 		var new_scale = target_size / size
 		sprite_node.scale = Vector2(new_scale, new_scale)
 
@@ -363,15 +398,15 @@ func create_hp_bar(max_hp):
 	bar.max_value = max_hp
 	bar.value = max_hp
 	bar.show_percentage = false
-	bar.size = Vector2(80, 14)
+	bar.size = Vector2(60, 12) 
 	bar.z_index = 2 
 	
 	var bg_style = StyleBoxFlat.new()
 	bg_style.bg_color = Color(0.1, 0.1, 0.1)
-	bg_style.corner_radius_top_left = 7
-	bg_style.corner_radius_top_right = 7
-	bg_style.corner_radius_bottom_left = 7
-	bg_style.corner_radius_bottom_right = 7
+	bg_style.corner_radius_top_left = 6
+	bg_style.corner_radius_top_right = 6
+	bg_style.corner_radius_bottom_left = 6
+	bg_style.corner_radius_bottom_right = 6
 	bg_style.border_width_left = 2
 	bg_style.border_width_right = 2
 	bg_style.border_width_top = 2
@@ -380,11 +415,11 @@ func create_hp_bar(max_hp):
 	bar.add_theme_stylebox_override("background", bg_style)
 	
 	var fill_style = StyleBoxFlat.new()
-	fill_style.bg_color = Color(0.2, 0.8, 0.2)
-	fill_style.corner_radius_top_left = 7
-	fill_style.corner_radius_top_right = 7
-	fill_style.corner_radius_bottom_left = 7
-	fill_style.corner_radius_bottom_right = 7
+	fill_style.bg_color = Color(0.8, 0.2, 0.2)
+	fill_style.corner_radius_top_left = 6
+	fill_style.corner_radius_top_right = 6
+	fill_style.corner_radius_bottom_left = 6
+	fill_style.corner_radius_bottom_right = 6
 	fill_style.border_width_left = 2
 	fill_style.border_width_right = 2
 	fill_style.border_width_top = 2
@@ -450,7 +485,7 @@ func find_path(start_idx, target_idx):
 func shake_node(node: Node2D):
 	var original_pos = node.position
 	for i in range(4):
-		var offset = Vector2(randf_range(-8, 8), randf_range(-8, 8)) 
+		var offset = Vector2(randf_range(-6, 6), randf_range(-6, 6)) 
 		node.position = original_pos + offset
 		await get_tree().create_timer(0.03).timeout
 	node.position = original_pos
@@ -459,7 +494,7 @@ func shoot_projectile(start_pos: Vector2, end_pos: Vector2):
 	var ball = Polygon2D.new()
 	var pts = PackedVector2Array()
 	for a in range(0, 360, 10):
-		pts.append(Vector2(cos(deg_to_rad(a)), sin(deg_to_rad(a))) * 10) 
+		pts.append(Vector2(cos(deg_to_rad(a)), sin(deg_to_rad(a))) * 8) 
 	
 	ball.polygon = pts
 	ball.color = Color(1.0, 0.2, 0.2) 
@@ -467,7 +502,7 @@ func shoot_projectile(start_pos: Vector2, end_pos: Vector2):
 	ball.position = start_pos
 	add_child(ball)
 	
-	SoundManager.play("shoot")
+	if get_node_or_null("/root/SoundManager"): SoundManager.play("shoot")
 	
 	var tween = create_tween()
 	tween.tween_property(ball, "position", end_pos, 0.3)
@@ -499,7 +534,7 @@ func highlight_cells():
 		if i in obstacles_array:
 			cells_array[i].color = Color(0.2, 0.15, 0.1)
 		else:
-			cells_array[i].color = Color(0.5, 0.7, 0.4)
+			cells_array[i].color = Color(0.5, 0.48, 0.45)
 		
 	if game_over: return
 
@@ -507,10 +542,10 @@ func highlight_cells():
 		var neighbors = get_neighbors(player_cell_index)
 		for n in neighbors:
 			if n != enemy_cell_index:
-				cells_array[n].color = Color(0.6, 0.85, 1.0) 
+				cells_array[n].color = Color(0.4, 0.75, 0.9) 
 
 	if hex_distance(player_cell_index, enemy_cell_index) <= enemy_range and player_ap > 0:
-		enemy.modulate = Color(1.0, 0.8, 0.0) 
+		enemy.modulate = Color(1.0, 0.5, 0.5) 
 	else:
 		enemy.modulate = Color(1.0, 1.0, 1.0) 
 
@@ -519,9 +554,9 @@ func update_positions_instant():
 	enemy.position = board_node.position + cells_array[enemy_cell_index].position
 	
 	if is_instance_valid(player_hp_bar):
-		player_hp_bar.position = player.position + Vector2(-40, -62) 
+		player_hp_bar.position = player.position + Vector2(-30, -50) 
 	if is_instance_valid(enemy_hp_bar):
-		enemy_hp_bar.position = enemy.position + Vector2(-40, -62)
+		enemy_hp_bar.position = enemy.position + Vector2(-30, -50)
 
 func move_sprite_smooth(sprite_node, hp_bar, target_cell_index):
 	var target_pos = board_node.position + cells_array[target_cell_index].position
@@ -538,9 +573,9 @@ func move_sprite_smooth(sprite_node, hp_bar, target_cell_index):
 	if direction == 0: direction = 1 
 	
 	var tween = create_tween()
-	tween.tween_property(sprite_node, "rotation_degrees", 20.0 * direction, 0.1)
+	tween.tween_property(sprite_node, "rotation_degrees", 15.0 * direction, 0.1)
 	tween.parallel().tween_property(sprite_node, "position", target_pos, 0.2)
-	tween.parallel().tween_property(hp_bar, "position", target_pos + Vector2(-40, -62), 0.2)
+	tween.parallel().tween_property(hp_bar, "position", target_pos + Vector2(-30, -50), 0.2)
 	tween.tween_property(sprite_node, "rotation_degrees", 0.0, 0.1)
 	
 	await tween.finished
@@ -570,17 +605,18 @@ func _input(event):
 
 						var original_pos = player.position
 						var dir = (enemy.position - player.position).normalized()
-						var attack_pos = original_pos + (dir * 25) 
+						var attack_pos = original_pos + (dir * 20) 
 						
 						var tween = create_tween()
 						tween.tween_property(player, "position", attack_pos, 0.1)
 						tween.tween_property(player, "position", original_pos, 0.1)
 						await tween.finished
 						
-						enemy_hp -= 3 # ВЕРНУЛИ ФИКСИРОВАННЫЙ УРОН
+						enemy_hp -= 3
 						player_ap -= 1
 						
-						SoundManager.play("hit")
+						if get_node_or_null("/root/SoundManager"): SoundManager.play("hit")
+						
 						await shake_node(enemy)
 						
 						if enemy_hp <= 0:
@@ -590,7 +626,6 @@ func _input(event):
 							update_ui()
 							is_win = true
 							var loot_name = GameManager.item_db[drop_item_id]["name"]
-							
 							show_end_screen("ПОБЕДА!", "Вы получили " + str(reward_xp) + " опыта.\nТрофей: " + loot_name)
 							return
 							
@@ -618,7 +653,7 @@ func end_player_turn():
 		if i in obstacles_array:
 			cells_array[i].color = Color(0.2, 0.15, 0.1)
 		else:
-			cells_array[i].color = Color(0.5, 0.7, 0.4)
+			cells_array[i].color = Color(0.5, 0.48, 0.45)
 			
 	await get_tree().create_timer(0.5).timeout
 	enemy_turn()
@@ -642,13 +677,13 @@ func enemy_turn():
 			else:
 				var original_pos = enemy.position
 				var dir = (player.position - enemy.position).normalized()
-				var attack_pos = original_pos + (dir * 25)
+				var attack_pos = original_pos + (dir * 20)
 				
 				var tween = create_tween()
 				tween.tween_property(enemy, "position", attack_pos, 0.1)
 				tween.tween_property(enemy, "position", original_pos, 0.1)
 				await tween.finished
-				SoundManager.play("hit")
+				if get_node_or_null("/root/SoundManager"): SoundManager.play("hit")
 				
 			player_hp -= enemy_damage
 			GameManager.player_hp = player_hp 
@@ -693,19 +728,21 @@ func show_end_screen(title_text, subtitle_text):
 		if i in obstacles_array:
 			cells_array[i].color = Color(0.2, 0.15, 0.1)
 		else:
-			cells_array[i].color = Color(0.5, 0.7, 0.4)
+			cells_array[i].color = Color(0.5, 0.48, 0.45)
 
 	end_title.text = title_text
 	end_subtitle.text = subtitle_text
 	
 	if is_win:
-		SoundManager.play("win")
+		if get_node_or_null("/root/SoundManager"): SoundManager.play("win")
 		end_title.add_theme_color_override("font_color", Color(0.3, 0.9, 0.3)) 
 		end_button.text = "Продолжить путь"
+		btn_return_town.visible = true # Показываем кнопку возврата в город
 	else:
-		SoundManager.play("lose")
+		if get_node_or_null("/root/SoundManager"): SoundManager.play("lose")
 		end_title.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3)) 
 		end_button.text = "Вернуться в город"
+		btn_return_town.visible = false # Прячем вторую кнопку при поражении
 		
 	end_panel.visible = true
 
@@ -716,6 +753,11 @@ func _on_end_button_pressed():
 	else:
 		get_tree().change_scene_to_file("res://Town.tscn")
 
+# НОВАЯ ФУНКЦИЯ ДЛЯ КНОПКИ "В ГОРОД"
+func _on_return_town_pressed():
+	GameManager.save_game()
+	get_tree().change_scene_to_file("res://Town.tscn")
+
 func create_pause_menu():
 	pause_overlay = ColorRect.new()
 	pause_overlay.color = Color(0, 0, 0, 0.7)
@@ -723,10 +765,10 @@ func create_pause_menu():
 	pause_overlay.z_index = 200
 	pause_overlay.visible = false
 	pause_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(pause_overlay)
+	ui_layer.add_child(pause_overlay)
 
 	pause_panel = Panel.new()
-	pause_panel.position = Vector2(710, 340)
+	pause_panel.position = Vector2(390, 160)
 	pause_panel.size = Vector2(500, 400)
 	pause_panel.z_index = 201
 	pause_panel.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -751,7 +793,7 @@ func create_pause_menu():
 	p_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	p_title.add_theme_font_size_override("font_size", 40)
 	p_title.add_theme_color_override("font_color", Color(0.9, 0.8, 0.6))
-	p_title.add_theme_font_override("font", load("res://assets/fonts/Rubik-Regular.ttf"))
+	if font_title: p_title.add_theme_font_override("font", font_title)
 	pause_panel.add_child(p_title)
 
 	var p_vbox = VBoxContainer.new()
@@ -785,7 +827,7 @@ func create_pause_menu():
 	p_vbox.add_child(btn_exit)
 
 	confirm_panel = Panel.new()
-	confirm_panel.position = Vector2(760, 390)
+	confirm_panel.position = Vector2(440, 200)
 	confirm_panel.size = Vector2(400, 250)
 	confirm_panel.z_index = 202
 	confirm_panel.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -800,7 +842,7 @@ func create_pause_menu():
 	c_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	c_title.add_theme_font_size_override("font_size", 28)
 	c_title.add_theme_color_override("font_color", Color(1, 0.5, 0.5))
-	c_title.add_theme_font_override("font", load("res://assets/fonts/Rubik-Regular.ttf"))
+	if font_title: c_title.add_theme_font_override("font", font_title)
 	confirm_panel.add_child(c_title)
 
 	var c_hbox = HBoxContainer.new()
